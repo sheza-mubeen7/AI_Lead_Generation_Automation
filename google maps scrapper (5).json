@@ -1,0 +1,564 @@
+{
+  "name": "google maps scrapper",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Scape Leads from Google Maps ",
+        "formDescription": "Scrape leads by just typing",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Search Query ",
+              "placeholder": "Cofee shops in Dubai",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "25c0d742-3258-4838-bfc2-e05153d3bbb1",
+      "name": "On form submission",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.3,
+      "position": [
+        -3488,
+        736
+      ],
+      "webhookId": "04745161-aa9c-444a-8b5f-8016f9bb5694"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "documentId": {
+          "__rl": true,
+          "value": "1Ew1H41zFMFrWeUgkEJmxKhcOX_Ze4RTgJW8YUvI4rKM",
+          "mode": "id"
+        },
+        "title": "= {{ $json['Search Query '] }} ",
+        "options": {}
+      },
+      "id": "bb99e55c-5309-4295-836e-ca98f23eb60c",
+      "name": "Create New Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -3312,
+        736
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "VmltfRFKQ5PBJRrN",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://google.serper.dev/maps?q={{ $('On form submission').item.json['Search Query '] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "c68eb1ab-65aa-47d6-bc15-f4ae124eae71",
+      "name": "Search Google Maps page 1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -3136,
+        736
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "8OhtUCQNido7USfE",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://google.serper.dev/maps",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=[\n  {\"q\": \"{{ $json.searchParameters.q }}\", \"page\": 2, \"ll\": \"{{ $json.ll }}\"},\n  {\"q\": \"{{ $json.searchParameters.q }}\", \"page\": 3, \"ll\": \"{{ $json.ll }}\"},\n  {\"q\": \"{{ $json.searchParameters.q }}\", \"page\": 4, \"ll\": \"{{ $json.ll }}\"}\n]",
+        "options": {}
+      },
+      "id": "000623aa-63e1-4964-9d21-e2fddd744a84",
+      "name": "Search Google Maps pages 2-4",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2944,
+        736
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "8OhtUCQNido7USfE",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [...$('Search Google Maps page 1').all(), ...$input.all()];\nconst companies = [];\n\nresults.forEach(item => {\n  if (item.json.places) {\n    item.json.places.forEach(place => {\n      if (place.website) {\n        const company = {\n          name: place.title || '',\n          phone: place.phoneNumber || '',\n          website: place.website,\n          address: place.address || '',\n          rating: place.rating || null,\n          ratingCount: place.ratingCount || null,\n          type: place.type || '',\n          latitude: place.latitude || null,\n          longitude: place.longitude || null\n        };\n        \n        companies.push(company);\n      }\n    });\n  }\n});\n\nreturn companies.map(company => ({json: company}));"
+      },
+      "id": "254362b1-ca74-4ba6-8951-526d55dd52df",
+      "name": "Format maps results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2720,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "website-not-empty",
+              "leftValue": "={{ $json.website }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b61158b9-5468-4772-bf93-d73273c6e1f8",
+      "name": "Has website?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2272,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.website }}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "3d1226fb-5cb9-4601-bc00-7fdaf1343941",
+      "name": "Scrape website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2048,
+        400
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const text = JSON.stringify($json);\nconst emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/g;\nconst badDomainPattern = /(google|gstatic|ggpht|schema\\.org|example\\.com|sentry\\.wixpress\\.com|sentry-next\\.wixpress\\.com|ingest\\.sentry\\.io|sentry\\.io|imli\\.com|test\\.com|localhost|domain\\.com|doe\\.com|xyz\\.com|gmail\\.com|godaddy\\.com|housecallpro\\.com|eyebytes\\.com|aol\\.com|yahoo\\.com|email\\.com|setmore\\.com)/;\n\nconst emails = (text.match(emailRegex) || []).filter(email => {\n  const domain = email.split('@')[1].toLowerCase();\n  \n  if (email.includes('.png') || email.includes('.jpg') || email.includes('.avif') || \n      email.includes('.gif') || email.includes('.webp') || email.includes('%20') || \n      email.includes('%')) {\n    return false;\n  }\n  \n  return !badDomainPattern.test(domain);\n}).map(email => email.toLowerCase().trim());\n\nconst uniqueEmails = [...new Set(emails)];\n\nreturn {\n  ...$('Format maps results').item.json,\n  email: uniqueEmails.length > 0 ? uniqueEmails[0] : ''\n};"
+      },
+      "id": "69cb48be-6e74-46c0-890d-cba7f8be7d85",
+      "name": "Extract emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1824,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Ew1H41zFMFrWeUgkEJmxKhcOX_Ze4RTgJW8YUvI4rKM",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $('Create New Sheet').first().json.title }}",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "website",
+              "displayName": "website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "address",
+              "displayName": "address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rating",
+              "displayName": "rating",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ratingCount",
+              "displayName": "ratingCount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "latitude",
+              "displayName": "latitude",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "longitude",
+              "displayName": "longitude",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "0ee5eaa9-db5f-4faa-93aa-e87b88994ba9",
+      "name": "Save emails to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1568,
+        736
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "VmltfRFKQ5PBJRrN",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "3cd3f225-772a-495c-a5ed-53f1867b20ba",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -2496,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "no-website-status",
+              "name": "status",
+              "value": "No website found",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bf1e6fdb-a3ea-4f58-8bd0-1330c47f885f",
+      "name": "Set no-website status",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2048,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Ew1H41zFMFrWeUgkEJmxKhcOX_Ze4RTgJW8YUvI4rKM",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $('Create New Sheet').first().json.title }}",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "162d298b-9c8c-4b0d-8825-51bfc85ff49a",
+      "name": "Save no-website to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1824,
+        592
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "VmltfRFKQ5PBJRrN",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "maxItems": 10
+      },
+      "id": "75ea101d-4887-48c9-9c8b-3018c3e87e38",
+      "name": "Limit",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        -3200,
+        1168
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Create New Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Sheet": {
+      "main": [
+        [
+          {
+            "node": "Search Google Maps page 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Google Maps page 1": {
+      "main": [
+        [
+          {
+            "node": "Search Google Maps pages 2-4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Google Maps pages 2-4": {
+      "main": [
+        [
+          {
+            "node": "Format maps results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format maps results": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has website?": {
+      "main": [
+        [
+          {
+            "node": "Scrape website",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set no-website status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape website": {
+      "main": [
+        [
+          {
+            "node": "Extract emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract emails": {
+      "main": [
+        [
+          {
+            "node": "Save emails to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save emails to Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Has website?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set no-website status": {
+      "main": [
+        [
+          {
+            "node": "Save no-website to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save no-website to Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "959dab1a-12fb-4851-a717-7f951a21e867",
+  "meta": {
+    "instanceId": "90e0b6cf8de4bb989877b7ce7198466c9126b4e19a414149cb541333acfc117a"
+  },
+  "nodeGroups": [],
+  "id": "7st9NX3FlmCuN3a7",
+  "tags": []
+}
