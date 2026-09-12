@@ -1,4 +1,4 @@
-# 🗺️ Google Maps Lead Scraper Automation
+# 🗺️ AI Lead Generation Automation
 
 An AI-powered lead generation automation built with **n8n** that finds relevant business leads from Google Maps based on a target location and business type, then organizes the collected data into a structured lead list.
 
